@@ -1,0 +1,1151 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Inventaris - Peminjaman & Pengembalian Barang</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen text-gray-800" x-data="inventoryApp()">
+
+    <!-- HEADER / NAVBAR -->
+    <header class="bg-indigo-600 shadow-md">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <div class="bg-white/10 p-2 rounded-lg text-white">
+                    <i class="fa-solid fa-boxes-stacked text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-white font-bold text-lg leading-tight">Sistem Inventaris</h1>
+                    <p class="text-indigo-200 text-xs">Peminjaman & Pengembalian Barang</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-2">
+                <!-- Admin Login Icon Button -->
+                <button @click="toggleAdminModal" class="bg-white/10 hover:bg-white/20 text-white p-2.5 rounded-lg text-sm font-medium transition flex items-center space-x-2 border border-white/25" title="Login Admin">
+                    <i class="fa-solid" :class="isAdmin ? 'fa-user-shield text-amber-300 text-lg' : 'fa-user text-lg'"></i>
+                    <span class="hidden sm:inline" x-text="isAdmin ? 'Keluar Admin' : 'Admin'"></span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN CONTAINER -->
+    <main class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+
+        <!-- TOMBOL UTAMA: FORM PENGAMBILAN BARANG -->
+        <div>
+            <button @click="openBorrowModal" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3.5 px-6 rounded-xl shadow-md transition flex items-center justify-center space-x-2 text-base">
+                <i class="fa-solid fa-hand-holding-hand text-lg"></i>
+                <span>Form Pengambilan Barang</span>
+            </button>
+        </div>
+
+        <!-- STATISTIK UTAMA (CARDS) -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100 relative overflow-hidden">
+                <div class="absolute top-0 left-0 h-full w-1.5 bg-indigo-600"></div>
+                <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">TOTAL BARANG</p>
+                <h3 class="text-3xl font-extrabold text-indigo-600" x-text="totalBarang"></h3>
+            </div>
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100 relative overflow-hidden">
+                <div class="absolute top-0 left-0 h-full w-1.5 bg-amber-500"></div>
+                <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">SEDANG DIPINJAM</p>
+                <h3 class="text-3xl font-extrabold text-amber-500" x-text="activeBorrowedCount"></h3>
+            </div>
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100 relative overflow-hidden">
+                <div class="absolute top-0 left-0 h-full w-1.5 bg-emerald-500"></div>
+                <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">TOTAL PENGEMBALIAN</p>
+                <h3 class="text-3xl font-extrabold text-emerald-600" x-text="totalReturnedCount"></h3>
+            </div>
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100 relative overflow-hidden">
+                <div class="absolute top-0 left-0 h-full w-1.5 bg-indigo-400"></div>
+                <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">JUMLAH ANGGOTA</p>
+                <h3 class="text-3xl font-extrabold text-indigo-800" x-text="members.length"></h3>
+            </div>
+        </div>
+
+        <!-- GRAFIK AKTIVITAS -->
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100 space-y-4">
+            <div class="flex flex-wrap justify-between items-center gap-3">
+                <div class="flex items-center space-x-2 text-indigo-900 font-bold">
+                    <i class="fa-solid fa-chart-line text-indigo-600"></i>
+                    <span>Grafik Aktivitas</span>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <select x-model="chartTimeFilter" class="border rounded-lg px-3 py-1.5 text-sm bg-white focus:ring-2 focus:ring-indigo-500">
+                        <option value="Semua Waktu">Semua Waktu</option>
+                        <option value="Hari">Hari</option>
+                        <option value="Bulan">Bulan</option>
+                        <option value="Tahun">Tahun</option>
+                    </select>
+                    <button @click="applyChartFilter" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition shadow-sm">Terapkan</button>
+                </div>
+            </div>
+
+            <!-- Visual Bar Chart Container -->
+            <div class="pt-4 pb-2 border-b border-gray-100 relative h-56 flex items-end px-4">
+                <div class="absolute left-2 top-2 text-xs text-gray-400 font-mono">10</div>
+                <div class="absolute left-2 bottom-6 text-xs text-gray-400 font-mono">1</div>
+                <div class="absolute inset-x-0 top-6 border-t border-dashed border-gray-200"></div>
+                <div class="absolute inset-x-0 bottom-6 border-t border-gray-200"></div>
+
+                <div class="w-full flex justify-center items-end h-full pb-6">
+                    <div class="flex flex-col items-center group">
+                        <div class="bg-indigo-400 hover:bg-indigo-500 w-32 rounded-t transition-all duration-300 flex items-center justify-center text-white text-xs font-semibold shadow"
+                             :style="'height: ' + (activeBorrowedCount > 0 ? '140px' : '10px') + ';'">
+                            <span x-text="activeBorrowedCount"></span>
+                        </div>
+                        <span class="text-xs text-gray-500 mt-2 font-mono" x-text="currentDateFormatted"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chart Legend -->
+            <div class="flex justify-center items-center space-x-6 text-xs font-medium text-gray-600 pt-1">
+                <div class="flex items-center space-x-2">
+                    <span class="w-3.5 h-3.5 bg-indigo-400 rounded-sm inline-block"></span>
+                    <span>Jumlah Peminjaman</span>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <span class="w-3.5 h-3.5 bg-emerald-500 rounded-sm inline-block"></span>
+                    <span>Jumlah Pengembalian</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIWAYAT PENGAMBILAN & PENGEMBALIAN BARANG -->
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100 space-y-4">
+            <div class="flex flex-wrap justify-between items-center gap-3">
+                <div>
+                    <h3 class="font-bold text-gray-800 flex items-center space-x-2">
+                        <i class="fa-solid fa-clock-rotate-left text-indigo-600"></i>
+                        <span>Riwayat Pengambilan & Pengembalian Barang</span>
+                    </h3>
+                    <p class="text-xs text-gray-500 mt-0.5">Transaksi terbaru ditampilkan lebih dahulu.</p>
+                </div>
+                <!-- Filter Tabs -->
+                <div class="flex bg-gray-100 p-1 rounded-lg space-x-1">
+                    <button @click="historyTab = 'Semua'" class="px-3 py-1.5 rounded-md text-xs font-semibold transition"
+                        :class="historyTab === 'Semua' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-200'">Semua</button>
+                    <button @click="historyTab = 'Pengambilan'" class="px-3 py-1.5 rounded-md text-xs font-semibold transition"
+                        :class="historyTab === 'Pengambilan' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-200'">Pengambilan</button>
+                    <button @click="historyTab = 'Pengembalian'" class="px-3 py-1.5 rounded-md text-xs font-semibold transition"
+                        :class="historyTab === 'Pengembalian' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-200'">Pengembalian</button>
+                </div>
+            </div>
+
+            <!-- Tabel Riwayat Utama -->
+            <div class="overflow-x-auto rounded-lg border border-gray-100">
+                <table class="w-full text-left text-sm">
+                    <thead class="bg-indigo-50/50 text-indigo-900 font-semibold text-xs uppercase tracking-wider">
+                        <tr>
+                            <th class="p-3">Anggota / Barang</th>
+                            <th class="p-3">Jumlah</th>
+                            <th class="p-3">Pengambilan</th>
+                            <th class="p-3">Estimasi Kembali</th>
+                            <th class="p-3">Pengembalian</th>
+                            <th class="p-3">Foto</th>
+                            <th class="p-3">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                        <template x-for="item in filteredHistoryTransactions" :key="item.id">
+                            <tr class="hover:bg-gray-50/50">
+                                <td class="p-3">
+                                    <div class="font-bold text-gray-900" x-text="item.memberName"></div>
+                                    <div class="text-xs text-gray-500" x-text="item.itemName"></div>
+                                </td>
+                                <td class="p-3 font-semibold" x-text="item.qty"></td>
+                                <td class="p-3 text-xs text-gray-600" x-text="item.borrowTime"></td>
+                                <td class="p-3 text-xs text-gray-600" x-text="item.estimatedReturnDate"></td>
+                                <td class="p-3 text-xs text-gray-600" x-text="item.returnTime || '-'"></td>
+                                <td class="p-3">
+                                    <template x-if="item.hasPhoto">
+                                        <span class="text-xs font-semibold text-indigo-600 underline cursor-pointer hover:text-indigo-800" @click="viewPhotoModal(item)">foto</span>
+                                    </template>
+                                    <template x-if="!item.hasPhoto">
+                                        <span class="text-xs text-gray-400">-</span>
+                                    </template>
+                                </td>
+                                <td class="p-3">
+                                    <span class="px-2.5 py-1 rounded-full text-xs font-semibold"
+                                        :class="item.status === 'Dipinjam' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'"
+                                        x-text="item.status"></span>
+                                </td>
+                            </tr>
+                        </template>
+                        <template x-if="filteredHistoryTransactions.length === 0">
+                            <tr>
+                                <td colspan="7" class="p-8 text-center text-gray-400 text-sm">Belum ada riwayat transaksi.</td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ADMIN PANEL / MODE PENGELOLAAN -->
+        <template x-if="isAdmin">
+            <div class="bg-white rounded-xl shadow-sm border border-indigo-200 p-5 space-y-6 bg-indigo-50/20">
+                <div class="flex flex-wrap justify-between items-center gap-4 border-b pb-4">
+                    <div class="flex items-center space-x-2">
+                        <span class="bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow-sm">Mode Pengelolaan</span>
+                        <span class="text-xs text-gray-600 font-medium">Panel kontrol admin aktif</span>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-3">
+                        <div class="flex items-center space-x-2 bg-white px-3 py-1.5 rounded-lg border">
+                            <label class="text-xs font-medium text-gray-600">Total Barang:</label>
+                            <input type="number" x-model.number="totalBarang" class="border rounded px-2 py-1 w-20 text-sm font-bold text-indigo-600 focus:outline-none">
+                        </div>
+                        <button @click="saveSettings" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition shadow-sm">Simpan</button>
+                        <button @click="openReturnModal" class="bg-amber-500 hover:bg-amber-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition shadow-sm">Pengembalian Barang</button>
+                        <button @click="resetData" class="bg-rose-600 hover:bg-rose-700 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition shadow-sm">Reset Data</button>
+                        <button @click="toggleAdminModal" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition shadow-sm">Keluar</button>
+                    </div>
+                </div>
+
+                <!-- ANALISIS ANGGOTA & BINTANG -->
+                <div class="space-y-3">
+                    <h3 class="text-sm font-bold text-gray-700 flex items-center space-x-2">
+                        <i class="fa-solid fa-users text-indigo-600"></i>
+                        <span>Analisis Anggota & Bintang</span>
+                    </h3>
+                    <div class="overflow-x-auto rounded-lg border border-gray-100 bg-white">
+                        <table class="w-full text-left text-sm">
+                            <thead class="bg-indigo-50/50 text-indigo-900 font-semibold text-xs uppercase tracking-wider">
+                                <tr>
+                                    <th class="p-3">No</th>
+                                    <th class="p-3">Nama Anggota</th>
+                                    <th class="p-3">Total Peminjaman</th>
+                                    <th class="p-3">Barang Dipinjam</th>
+                                    <th class="p-3">Sisa Bintang</th>
+                                    <th class="p-3 text-center">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                <template x-for="(member, index) in members" :key="member.id">
+                                    <tr class="hover:bg-gray-50/50">
+                                        <td class="p-3 font-medium text-gray-500" x-text="index + 1"></td>
+                                        <td class="p-3 font-semibold text-gray-800" x-text="member.name"></td>
+                                        <td class="p-3" x-text="member.totalBorrowed"></td>
+                                        <td class="p-3" x-text="member.activeBorrowed"></td>
+                                        <td class="p-3 text-amber-500">
+                                            <span x-html="renderStars(member.stars)"></span>
+                                            <span class="text-xs text-gray-500 ml-1" x-text="'(' + member.stars + ')'"></span>
+                                        </td>
+                                        <td class="p-3 text-center space-x-2">
+                                            <button @click="editMember(member)" class="text-indigo-600 hover:text-indigo-800 p-1" title="Edit Bintang"><i class="fa-solid fa-pen-to-square"></i></button>
+                                            <button @click="deleteMember(member.id)" class="text-rose-600 hover:text-rose-800 p-1" title="Hapus Anggota"><i class="fa-solid fa-trash"></i></button>
+                                        </td>
+                                    </tr>
+                                </template>
+                                <template x-if="members.length === 0">
+                                    <tr>
+                                        <td colspan="6" class="p-6 text-center text-gray-400 text-sm">Belum ada anggota terdaftar.</td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- LAPORAN & ANALISIS TRANSAKSI -->
+                <div class="space-y-3 pt-2">
+                    <h3 class="text-sm font-bold text-gray-700 flex items-center space-x-2">
+                        <i class="fa-solid fa-file-lines text-indigo-600"></i>
+                        <span>Laporan & Analisis Transaksi</span>
+                    </h3>
+                    <div class="flex flex-wrap items-center gap-3 bg-white p-3 rounded-lg border">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-500 mb-1">Mode</label>
+                            <select x-model="reportMode" class="border rounded-lg px-3 py-1.5 text-sm bg-white focus:ring-2 focus:ring-indigo-500">
+                                <option value="Hari">Hari</option>
+                                <option value="Bulan">Bulan</option>
+                                <option value="Tahun">Tahun</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-500 mb-1">Tanggal</label>
+                            <input type="date" x-model="reportDateFilter" class="border rounded-lg px-3 py-1.5 text-sm bg-white focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                        <div class="self-end">
+                            <button @click="filterReport" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition shadow-sm">Filter</button>
+                        </div>
+                        <div class="self-end ml-auto">
+                            <button @click="exportCSV" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition shadow-sm flex items-center space-x-1.5">
+                                <i class="fa-solid fa-download"></i>
+                                <span>Unduh CSV</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Laporan Transaksi Tabel -->
+                    <div class="overflow-x-auto rounded-lg border border-gray-100 bg-white mt-2">
+                        <table class="w-full text-left text-sm">
+                            <thead class="bg-indigo-50/50 text-indigo-900 font-semibold text-xs uppercase tracking-wider">
+                                <tr>
+                                    <th class="p-3">ID / Tgl</th>
+                                    <th class="p-3">Nama</th>
+                                    <th class="p-3">Barang</th>
+                                    <th class="p-3">Jml</th>
+                                    <th class="p-3">Waktu Ambil</th>
+                                    <th class="p-3">Waktu Kembali</th>
+                                    <th class="p-3">Foto Ambil</th>
+                                    <th class="p-3">Foto Kembali</th>
+                                    <th class="p-3">Status</th>
+                                    <th class="p-3 text-center">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                <template x-for="item in transactions" :key="item.id">
+                                    <tr class="hover:bg-gray-50/50">
+                                        <td class="p-3 font-mono text-xs text-gray-600">
+                                            <div class="font-bold text-gray-900" x-text="item.id"></div>
+                                            <div x-text="item.date"></div>
+                                        </td>
+                                        <td class="p-3 font-semibold text-gray-800" x-text="item.memberName"></td>
+                                        <td class="p-3 text-gray-700" x-text="item.itemName"></td>
+                                        <td class="p-3 font-medium" x-text="item.qty"></td>
+                                        <td class="p-3 text-xs text-gray-600" x-text="item.borrowTime"></td>
+                                        <td class="p-3 text-xs text-gray-600" x-text="item.returnTime || '-'"></td>
+                                        <td class="p-3">
+                                            <template x-if="item.hasPhoto">
+                                                <span class="text-xs font-semibold text-indigo-600 underline cursor-pointer hover:text-indigo-800" @click="viewPhotoModal(item, 'borrow')">foto</span>
+                                            </template>
+                                            <template x-if="!item.hasPhoto">
+                                                <span class="text-xs text-gray-400">-</span>
+                                            </template>
+                                        </td>
+                                        <td class="p-3">
+                                            <template x-if="item.hasReturnPhoto">
+                                                <span class="text-xs font-semibold text-amber-600 underline cursor-pointer hover:text-amber-800" @click="viewPhotoModal(item, 'return')">foto</span>
+                                            </template>
+                                            <template x-if="!item.hasReturnPhoto">
+                                                <span class="text-xs text-gray-400">-</span>
+                                            </template>
+                                        </td>
+                                        <td class="p-3">
+                                            <span class="px-2.5 py-1 rounded-full text-xs font-semibold"
+                                                :class="item.status === 'Dipinjam' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'"
+                                                x-text="item.status"></span>
+                                        </td>
+                                        <td class="p-3 text-center">
+                                            <button @click="deleteTransaction(item.id)" class="text-rose-600 hover:text-rose-800 p-1" title="Hapus Transaksi"><i class="fa-solid fa-trash"></i></button>
+                                        </td>
+                                    </tr>
+                                </template>
+                                <template x-if="transactions.length === 0">
+                                    <tr>
+                                        <td colspan="10" class="p-6 text-center text-gray-400 text-sm">Belum ada transaksi.</td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </template>
+
+    </main>
+
+    <!-- MODAL FORM PENGAMBILAN BARANG -->
+    <div x-show="showBorrowModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" style="display: none;">
+        <div @click.outside="showBorrowModal = false" class="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden border border-gray-100">
+            <div class="bg-emerald-600 text-white px-6 py-4 flex justify-between items-center">
+                <h3 class="font-bold text-base flex items-center space-x-2">
+                    <i class="fa-solid fa-hand-holding-hand"></i>
+                    <span>Form Pengambilan Barang</span>
+                </h3>
+                <button @click="showBorrowModal = false" class="text-white/80 hover:text-white text-lg"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form @submit.prevent="submitBorrowForm" class="p-6 space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-700 uppercase mb-1">Nama Peminjam *</label>
+                    <input type="text" x-model="borrowForm.memberName" required placeholder="Contoh: Raka" class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-700 uppercase mb-1">Nama Barang *</label>
+                    <input type="text" x-model="borrowForm.itemName" required placeholder="Contoh: Tang" class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-700 uppercase mb-1">Jumlah *</label>
+                    <input type="number" min="1" x-model.number="borrowForm.qty" required class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-700 uppercase mb-1">Tanggal Pinjam *</label>
+                        <div class="relative">
+                            <i class="fa-regular fa-calendar absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                            <input type="text" x-model="borrowForm.borrowDateStr" required class="w-full border rounded-lg pl-9 pr-3 py-2 text-sm bg-gray-50 text-gray-700 font-mono">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-700 uppercase mb-1">Jam *</label>
+                        <div class="relative">
+                            <i class="fa-regular fa-clock absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                            <input type="text" x-model="borrowForm.borrowTimeSlot" required class="w-full border rounded-lg pl-9 pr-3 py-2 text-sm bg-gray-50 text-gray-700 font-mono">
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-700 uppercase mb-1">Estimasi Tgl Kembali (dd/mm/yyyy) *</label>
+                    <div class="relative">
+                        <i class="fa-regular fa-calendar-check absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                        <input type="text" x-model="borrowForm.estimatedReturnDate" required placeholder="dd/mm/yyyy" class="w-full border rounded-lg pl-9 pr-3 py-2 text-sm bg-gray-50 text-gray-700 font-mono">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-700 uppercase mb-1">Foto Barang Saat Diambil (opsional)</label>
+                    <div class="mt-2 flex items-center justify-between p-3 border rounded-xl bg-gray-50">
+                        <div class="flex items-center space-x-2 text-sm text-gray-600 truncate max-w-[240px]">
+                            <i class="fa-regular fa-image text-gray-400"></i>
+                            <span class="font-medium truncate" x-text="borrowForm.photoName"></span>
+                        </div>
+                        <div class="flex items-center space-x-2 flex-shrink-0">
+                            <label class="cursor-pointer bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 text-xs px-3 py-1.5 rounded-lg shadow-sm font-medium transition">
+                                <span>Pilih File</span>
+                                <input type="file" @change="handleBorrowFileSelect" class="hidden" accept="image/*">
+                            </label>
+                            <button type="button" @click="removeBorrowPhoto" class="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-xs px-3 py-1.5 rounded-lg font-semibold transition">
+                                Hapus
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pt-4 flex justify-end space-x-3 border-t">
+                    <button type="button" @click="showBorrowModal = false" class="px-4 py-2 rounded-lg border text-sm font-medium text-gray-600 hover:bg-gray-50 transition">Batal</button>
+                    <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-lg text-sm font-semibold shadow transition">Simpan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL FORM PENGEMBALIAN BARANG -->
+    <div x-show="showReturnModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" style="display: none;">
+        <div @click.outside="showReturnModal = false" class="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden border border-gray-100">
+            <div class="bg-amber-600 text-white px-6 py-4 flex justify-between items-center">
+                <h3 class="font-bold text-base flex items-center space-x-2">
+                    <i class="fa-solid fa-arrow-rotate-left"></i>
+                    <span>Form Pengembalian Barang</span>
+                </h3>
+                <button @click="showReturnModal = false" class="text-white/80 hover:text-white text-lg"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form @submit.prevent="submitReturnForm" class="p-6 space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-700 uppercase mb-1">Pilih Transaksi Aktif *</label>
+                    <select x-model="returnForm.selectedTxId" required class="w-full border rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                        <option value="">-- Pilih Barang Sedang Dipinjam --</option>
+                        <template x-for="tx in activeBorrowedTransactions" :key="tx.id">
+                            <option :value="tx.id" x-text="tx.memberName + ' - ' + tx.itemName + ' (' + tx.qty + ') [' + tx.date + ']'"></option>
+                        </template>
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-700 uppercase mb-1">Tgl Kembali *</label>
+                        <input type="text" x-model="returnForm.returnDateStr" required class="w-full border rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-700 font-mono">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-700 uppercase mb-1">Jam *</label>
+                        <input type="text" x-model="returnForm.returnTimeSlot" required class="w-full border rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-700 font-mono">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-700 uppercase mb-1">Status Sanksi *</label>
+                    <select x-model="returnForm.sanctionStatus" required class="w-full border rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                        <option value="Tepat Waktu (Bintang Utuh)">Tepat Waktu (Bintang Utuh)</option>
+                        <option value="Terlambat / Barang Rusak (Kurang 1 Bintang)">Terlambat / Barang Rusak (Kurang 1 Bintang)</option>
+                        <option value="Tidak Dikembalikan / Hilang (Kurang 1 Bintang)">Tidak Dikembalikan / Hilang (Kurang 1 Bintang)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-700 uppercase mb-1">Foto Barang Saat Dikembalikan (opsional)</label>
+                    <div class="mt-2 flex items-center justify-between p-3 border rounded-xl bg-gray-50">
+                        <div class="flex items-center space-x-2 text-sm text-gray-600 truncate max-w-[240px]">
+                            <i class="fa-regular fa-image text-gray-400"></i>
+                            <span class="font-medium truncate" x-text="returnForm.photoName"></span>
+                        </div>
+                        <div class="flex items-center space-x-2 flex-shrink-0">
+                            <label class="cursor-pointer bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 text-xs px-3 py-1.5 rounded-lg shadow-sm font-medium transition">
+                                <span>Pilih File</span>
+                                <input type="file" @change="handleReturnFileSelect" class="hidden" accept="image/*">
+                            </label>
+                            <button type="button" @click="removeReturnPhoto" class="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-xs px-3 py-1.5 rounded-lg font-semibold transition">
+                                Hapus
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pt-4 flex justify-end space-x-3 border-t">
+                    <button type="button" @click="showReturnModal = false" class="px-4 py-2 rounded-lg border text-sm font-medium text-gray-600 hover:bg-gray-50 transition">Batal</button>
+                    <button type="submit" class="bg-amber-600 hover:bg-amber-700 text-white px-5 py-2 rounded-lg text-sm font-semibold shadow transition">Simpan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL PIN ADMIN -->
+    <div x-show="showAdminPinModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" style="display: none;">
+        <div @click.outside="showAdminPinModal = false" class="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden border border-gray-100 p-6 space-y-4">
+            <div class="text-center space-y-1">
+                <div class="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto text-xl font-bold">
+                    <i class="fa-solid fa-lock"></i>
+                </div>
+                <h3 class="font-bold text-gray-800 text-lg">Akses Mode Admin</h3>
+                <p class="text-xs text-gray-500">Masukkan PIN Admin</p>
+            </div>
+            <form @submit.prevent="verifyAdminPin" class="space-y-4">
+                <input type="password" x-model="adminPinInput" placeholder="PIN" maxlength="4" required :disabled="isLoadingAdmin" class="w-full text-center tracking-widest text-lg border rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none disabled:bg-gray-100 disabled:text-gray-400">
+                <div class="flex space-x-2">
+                    <button type="button" @click="showAdminPinModal = false" :disabled="isLoadingAdmin" class="w-1/2 border py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50 font-medium">Batal</button>
+                    <button type="submit" :disabled="isLoadingAdmin" class="w-1/2 bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-lg text-sm font-semibold shadow disabled:opacity-75 flex items-center justify-center">
+                        <span x-show="!isLoadingAdmin">Masuk</span>
+                        <span x-show="isLoadingAdmin" style="display: none;"><i class="fa-solid fa-spinner fa-spin"></i> Memuat...</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL EDIT MEMBER & BINTANG -->
+    <div x-show="showEditMemberModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" style="display: none;">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4">
+            <h3 class="font-bold text-gray-800 text-base">Edit Bintang Anggota</h3>
+            <form @submit.prevent="saveMemberEdit" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Nama Anggota</label>
+                    <input type="text" x-model="activeMemberEdit.name" disabled class="w-full border rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Jumlah Bintang (1 - 3)</label>
+                    <select x-model.number="activeMemberEdit.stars" class="w-full border rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-indigo-500">
+                        <option value="3">⭐⭐⭐ (Sangat Baik)</option>
+                        <option value="2">⭐⭐ (Peringatan)</option>
+                        <option value="1">⭐ (Penalti)</option>
+                    </select>
+                </div>
+                <div class="flex justify-end space-x-2 pt-2">
+                    <button type="button" @click="showEditMemberModal = false" class="px-4 py-2 border rounded-lg text-sm">Batal</button>
+                    <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold shadow">Simpan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL PRATINJAU FOTO BUKTI -->
+    <div x-show="showPhotoPreviewModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" style="display: none;">
+        <div @click.outside="showPhotoPreviewModal = false" class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-100">
+            <div class="bg-indigo-600 text-white px-6 py-4 flex justify-between items-center">
+                <h3 class="font-bold text-base flex items-center space-x-2">
+                    <i class="fa-solid fa-image"></i>
+                    <span>Pratinjau Foto Barang</span>
+                </h3>
+                <button @click="showPhotoPreviewModal = false" class="text-white/80 hover:text-white text-lg"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="p-6 space-y-4 text-center">
+                <div class="bg-gray-100 rounded-xl overflow-hidden border p-2 flex items-center justify-center min-h-[220px]">
+                    <img :src="currentPhotoUrl" alt="Foto Barang" class="max-h-72 object-contain rounded-lg shadow-sm" onerror="this.src='https://placehold.co/400x300/e2e8f0/475569?text=Bukti+Foto+Barang'">
+                </div>
+                <div class="text-sm font-medium text-gray-700">
+                    Barang: <span class="font-bold text-indigo-600" x-text="currentPhotoItemName"></span> (<span x-text="currentPhotoMemberName"></span>)
+                </div>
+                <div>
+                    <button @click="showPhotoPreviewModal = false" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-xl text-sm font-semibold shadow transition">Tutup</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL KONFIRMASI CUSTOM -->
+    <div x-show="confirmModal.show" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" style="display: none;">
+        <div @click.outside="confirmModal.show = false" class="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden border border-gray-100 p-6 text-center space-y-4">
+            <div class="w-12 h-12 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto text-xl font-bold">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <div>
+                <h3 class="font-bold text-gray-800 text-lg" x-text="confirmModal.title"></h3>
+                <p class="text-sm text-gray-500 mt-1" x-text="confirmModal.message"></p>
+            </div>
+            <div class="flex space-x-2 pt-2">
+                <button @click="confirmModal.show = false" class="w-1/2 border py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50 font-medium transition">Batal</button>
+                <button @click="executeConfirmAction" class="w-1/2 bg-rose-600 hover:bg-rose-700 text-white py-2 rounded-lg text-sm font-semibold shadow transition">Ya, Lanjutkan</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- NOTIFICATION BOX -->
+    <div x-show="notification.show" x-transition class="fixed bottom-5 right-5 z-50 bg-gray-900 text-white px-4 py-3 rounded-xl shadow-lg flex items-center space-x-3 text-sm" style="display: none;">
+        <i class="fa-solid fa-circle-check text-emerald-400 text-lg"></i>
+        <span x-text="notification.message"></span>
+    </div>
+
+    <!-- SCRIPT LOGIC -->
+    <script>
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxtasBASLFpIi1fLH8HPmO9NHc0kPu3kvCPg8K5kg0L354RKoU5_a8ekV5RxPZrw_CJ/exec";
+
+        function inventoryApp() {
+            return {
+                isAdmin: false,
+                showAdminPinModal: false,
+                adminPinInput: '',
+                isLoadingAdmin: false,
+                showBorrowModal: false,
+                showReturnModal: false,
+                showEditMemberModal: false,
+                showPhotoPreviewModal: false,
+                currentPhotoUrl: '',
+                currentPhotoItemName: '',
+                currentPhotoMemberName: '',
+                totalBarang: 50,
+                historyTab: 'Semua',
+                chartTimeFilter: 'Semua Waktu',
+                reportMode: 'Hari',
+                reportDateFilter: '',
+                currentDateFormatted: '24/10/2026',
+
+                confirmModal: {
+                    show: false,
+                    title: '',
+                    message: '',
+                    action: null
+                },
+
+                notification: {
+                    show: false,
+                    message: ''
+                },
+
+                borrowForm: {
+                    memberName: '',
+                    itemName: '',
+                    qty: 1,
+                    borrowDateStr: '24/10/2026',
+                    borrowTimeSlot: '21:11',
+                    estimatedReturnDate: '27/10/2026',
+                    photoName: 'Tidak ada file yang dipilih',
+                    hasPhoto: false,
+                    photoDataUrl: ''
+                },
+
+                returnForm: {
+                    selectedTxId: '',
+                    returnDateStr: '24/10/2026',
+                    returnTimeSlot: '21:11',
+                    sanctionStatus: 'Tepat Waktu (Bintang Utuh)',
+                    photoName: 'Tidak ada file yang dipilih',
+                    hasPhoto: false,
+                    photoDataUrl: ''
+                },
+
+                activeMemberEdit: {
+                    id: null,
+                    name: '',
+                    stars: 3
+                },
+
+                members: [
+                    { id: 1, name: 'raka', totalBorrowed: 1, activeBorrowed: 1, stars: 3 }
+                ],
+
+                transactions: [
+                    {
+                        id: 'mvmdwlje96c',
+                        date: '24/10/2026',
+                        memberName: 'raka',
+                        itemName: 'tang',
+                        qty: 1,
+                        borrowTime: '24/10/2026 21:11',
+                        estimatedReturnDate: '27/10/2026',
+                        returnTime: null,
+                        hasPhoto: true,
+                        photoUrl: 'https://placehold.co/400x300/e2e8f0/475569?text=Tang+Inventaris',
+                        status: 'Dipinjam'
+                    }
+                ],
+
+                getCurrentDateStr() {
+                    const today = new Date();
+                    const dd = String(today.getDate()).padStart(2, '0');
+                    const mm = String(today.getMonth() + 1).padStart(2, '0');
+                    const yyyy = today.getFullYear();
+                    return dd + '/' + mm + '/' + yyyy;
+                },
+
+                getCurrentTimeStr() {
+                    const today = new Date();
+                    const hh = String(today.getHours()).padStart(2, '0');
+                    const min = String(today.getMinutes()).padStart(2, '0');
+                    return hh + ':' + min;
+                },
+
+                getEstimatedReturnDateStr() {
+                    const today = new Date();
+                    today.setDate(today.getDate() + 3); // Default estimasi +3 hari
+                    const dd = String(today.getDate()).padStart(2, '0');
+                    const mm = String(today.getMonth() + 1).padStart(2, '0');
+                    const yyyy = today.getFullYear();
+                    return dd + '/' + mm + '/' + yyyy;
+                },
+
+                async init() {
+                    // Cek apakah Admin sudah login sebelumnya (Session Storage)
+                    if (sessionStorage.getItem("isLoggedIn") === "true") {
+                        this.isAdmin = true;
+                    }
+
+                    const savedTransactions = localStorage.getItem('sistem_inventaris_transactions');
+                    const savedMembers = localStorage.getItem('sistem_inventaris_members');
+                    const savedTotal = localStorage.getItem('sistem_inventaris_total');
+                    
+                    if (savedTransactions) this.transactions = JSON.parse(savedTransactions);
+                    if (savedMembers) this.members = JSON.parse(savedMembers);
+                    if (savedTotal) this.totalBarang = parseInt(savedTotal);
+
+                    // 2. Otomatis Ambil Data Terbaru Saat Halaman Dimuat / Refresh
+                    try {
+                        let response = await fetch(`${WEB_APP_URL}?action=getTransactions`);
+                        let dataTransaksi = await response.json();
+                        
+                        // Timpa atau sinkronkan data JSON dari API ke dalam state aplikasi
+                        if (dataTransaksi && dataTransaksi.length > 0) {
+                            this.transactions = dataTransaksi.map(item => ({
+                                id: item.id_transaksi || Math.random().toString(36).substring(2, 10),
+                                date: item.tgl_pinjam || '',
+                                memberName: item.nama_peminjam || '',
+                                itemName: item.nama_barang || '',
+                                qty: item.jumlah || 1,
+                                borrowTime: (item.tgl_pinjam && item.waktu_pinjam) ? `${item.tgl_pinjam} ${item.waktu_pinjam}` : '',
+                                estimatedReturnDate: item.estimasi_kembali || '-',
+                                returnTime: item.waktu_kembali || null,
+                                status: item.status || 'Dipinjam',
+                                hasPhoto: false, // fallback 
+                                hasReturnPhoto: false
+                            }));
+
+                            // Ambil total barang jika disediakan dari backend
+                            if(dataTransaksi[0].total_barang) {
+                                this.totalBarang = parseInt(dataTransaksi[0].total_barang);
+                            }
+                            
+                            this.saveToLocalStorage(); // Simpan sinkronisasi ke lokal
+                        }
+                    } catch (error) {
+                        console.warn("Peringatan: Gagal tersambung ke server Google (Offline mode). Menggunakan data lokal.");
+                        // Opsi: Anda dapat menampilkan notifikasi di sini jika ingin pengguna tahu mereka sedang offline
+                        // this.showNotification("Sedang offline, menggunakan data lokal.");
+                    }
+                },
+
+                saveToLocalStorage() {
+                    localStorage.setItem('sistem_inventaris_transactions', JSON.stringify(this.transactions));
+                    localStorage.setItem('sistem_inventaris_members', JSON.stringify(this.members));
+                    localStorage.setItem('sistem_inventaris_total', this.totalBarang);
+                },
+
+                get activeBorrowedCount() {
+                    return this.transactions.filter(t => t.status === 'Dipinjam').length;
+                },
+
+                get totalReturnedCount() {
+                    return this.transactions.filter(t => t.status === 'Dikembalikan').length;
+                },
+
+                get activeBorrowedTransactions() {
+                    return this.transactions.filter(t => t.status === 'Dipinjam');
+                },
+
+                get filteredHistoryTransactions() {
+                    if (this.historyTab === 'Pengambilan') {
+                        return this.transactions;
+                    } else if (this.historyTab === 'Pengembalian') {
+                        return this.transactions.filter(t => t.status === 'Dikembalikan');
+                    }
+                    return this.transactions;
+                },
+
+                toggleAdminModal() {
+                    if (this.isAdmin) {
+                        this.isAdmin = false;
+                        sessionStorage.removeItem("isLoggedIn"); // Hapus sesi saat keluar
+                        this.showNotification('Keluar dari Mode Admin');
+                    } else {
+                        this.adminPinInput = '';
+                        this.showAdminPinModal = true;
+                    }
+                },
+
+                async verifyAdminPin() {
+                    this.isLoadingAdmin = true;
+                    try {
+                        // 1. Fungsi Login dengan jaminan efek loading minimal 1 detik
+                        const fetchPromise = fetch(`${WEB_APP_URL}?action=getAdmin`).then(res => res.json());
+                        const timerPromise = new Promise(resolve => setTimeout(resolve, 1000));
+
+                        let [admins] = await Promise.all([fetchPromise, timerPromise]);
+                        
+                        let validAdmin = admins.find(a => a.pin == this.adminPinInput && a.status === "Aktif");
+
+                        if (validAdmin) {
+                            this.isAdmin = true;
+                            sessionStorage.setItem("isLoggedIn", "true"); // Simpan sesi login admin
+                            this.showAdminPinModal = false;
+                            this.showNotification('Mode Admin berhasil diaktifkan');
+                        } else {
+                            this.showNotification('PIN salah atau akun non-aktif!');
+                        }
+                    } catch (error) {
+                        console.warn("Peringatan koneksi Google Apps Script. Beralih ke verifikasi lokal darurat.");
+                        // Fallback jika API Gagal: Izinkan masuk menggunakan PIN default untuk pengujian UI
+                        if (this.adminPinInput === '1234') {
+                            this.isAdmin = true;
+                            sessionStorage.setItem("isLoggedIn", "true"); // Simpan sesi login admin lokal
+                            this.showAdminPinModal = false;
+                            this.showNotification('Mode Admin (Offline/Lokal) diaktifkan');
+                        } else {
+                            this.showNotification("Server tidak merespons, dan PIN lokal salah.");
+                        }
+                    } finally {
+                        this.isLoadingAdmin = false;
+                    }
+                },
+
+                openBorrowModal() {
+                    this.borrowForm = {
+                        memberName: '',
+                        itemName: '',
+                        qty: 1,
+                        borrowDateStr: this.getCurrentDateStr(),
+                        borrowTimeSlot: this.getCurrentTimeStr(),
+                        estimatedReturnDate: this.getEstimatedReturnDateStr(),
+                        photoName: 'Tidak ada file yang dipilih',
+                        hasPhoto: false,
+                        photoDataUrl: ''
+                    };
+                    this.showBorrowModal = true;
+                },
+
+                openReturnModal() {
+                    this.returnForm = {
+                        selectedTxId: '',
+                        returnDateStr: this.getCurrentDateStr(),
+                        returnTimeSlot: this.getCurrentTimeStr(),
+                        sanctionStatus: 'Tepat Waktu (Bintang Utuh)',
+                        photoName: 'Tidak ada file yang dipilih',
+                        hasPhoto: false,
+                        photoDataUrl: ''
+                    };
+                    this.showReturnModal = true;
+                },
+
+                openReturnModalFor(txId) {
+                    this.returnForm = {
+                        selectedTxId: txId,
+                        returnDateStr: this.getCurrentDateStr(),
+                        returnTimeSlot: this.getCurrentTimeStr(),
+                        sanctionStatus: 'Tepat Waktu (Bintang Utuh)',
+                        photoName: 'Tidak ada file yang dipilih',
+                        hasPhoto: false,
+                        photoDataUrl: ''
+                    };
+                    this.showReturnModal = true;
+                },
+
+                openReturnModalFor(txId) {
+                    this.returnForm = {
+                        selectedTxId: txId,
+                        returnDateStr: this.getCurrentDateStr(),
+                        returnTimeSlot: this.getCurrentTimeStr(),
+                        sanctionStatus: 'Tepat Waktu',
+                        photoName: 'Tidak ada file yang dipilih',
+                        hasPhoto: false,
+                        photoDataUrl: ''
+                    };
+                    this.showReturnModal = true;
+                },
+
+                handleBorrowFileSelect(event) {
+                    const file = event.target.files[0];
+                    if (file) {
+                        this.borrowForm.photoName = file.name;
+                        this.borrowForm.hasPhoto = true;
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            this.borrowForm.photoDataUrl = e.target.result;
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                },
+
+                removeBorrowPhoto() {
+                    this.borrowForm.photoName = 'Tidak ada file yang dipilih';
+                    this.borrowForm.hasPhoto = false;
+                    this.borrowForm.photoDataUrl = '';
+                    this.showNotification('Foto berhasil dihapus.');
+                },
+
+                handleReturnFileSelect(event) {
+                    const file = event.target.files[0];
+                    if (file) {
+                        this.returnForm.photoName = file.name;
+                        this.returnForm.hasPhoto = true;
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            this.returnForm.photoDataUrl = e.target.result;
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                },
+
+                removeReturnPhoto() {
+                    this.returnForm.photoName = 'Tidak ada file yang dipilih';
+                    this.returnForm.hasPhoto = false;
+                    this.returnForm.photoDataUrl = '';
+                    this.showNotification('Foto pengembalian dihapus.');
+                },
+
+                async submitBorrowForm() {
+                    const newTx = {
+                        id: Math.random().toString(36).substring(2, 10),
+                        date: this.borrowForm.borrowDateStr,
+                        memberName: this.borrowForm.memberName.toLowerCase().trim(),
+                        itemName: this.borrowForm.itemName.toLowerCase().trim(),
+                        qty: this.borrowForm.qty,
+                        borrowTime: `${this.borrowForm.borrowDateStr} ${this.borrowForm.borrowTimeSlot}`,
+                        estimatedReturnDate: this.borrowForm.estimatedReturnDate,
+                        returnTime: null,
+                        hasPhoto: this.borrowForm.hasPhoto,
+                        photoUrl: this.borrowForm.photoDataUrl || 'https://placehold.co/400x300/e2e8f0/475569?text=Bukti+Foto',
+                        status: 'Dipinjam'
+                    };
+
+                    this.transactions.unshift(newTx);
+
+                    let existingMember = this.members.find(m => m.name === newTx.memberName);
+                    if (existingMember) {
+                        existingMember.totalBorrowed += 1;
+                        existingMember.activeBorrowed += 1;
+                    } else {
+                        this.members.push({
+                            id: Date.now(),
+                            name: newTx.memberName,
+                            totalBorrowed: 1,
+                            activeBorrowed: 1,
+                            stars: 3
+                        });
+                    }
+
+                    this.saveToLocalStorage();
+                    this.showBorrowModal = false;
+                    this.showNotification('Menyimpan ke server Google Sheets...');
+
+                    // 4. Kirim Data Peminjaman Baru (POST ke Google Sheets)
+                    try {
+                        let response = await fetch(WEB_APP_URL, {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "text/plain;charset=utf-8",
+                            },
+                            body: JSON.stringify({
+                                action: "addTransaction",
+                                id_transaksi: newTx.id,
+                                nama_peminjam: newTx.memberName,
+                                nama_barang: newTx.itemName,
+                                jumlah: newTx.qty,
+                                tgl_pinjam: this.borrowForm.borrowDateStr,
+                                waktu_pinjam: this.borrowForm.borrowTimeSlot,
+                                status: newTx.status
+                            })
+                        });
+                        
+                        let result = await response.json();
+                        if (result.status === "success") {
+                            this.showNotification("Data berhasil disimpan ke Google Sheets!");
+                            await this.init(); // Memuat ulang/refresh data sinkron dari server
+                        }
+                    } catch (error) {
+                        console.error("Gagal mengirim data:", error);
+                        this.showNotification("Gagal ke server, data tersimpan secara lokal.");
+                    }
+                },
+
+                async submitReturnForm() {
+                    const tx = this.transactions.find(t => t.id === this.returnForm.selectedTxId);
+                    if (tx && tx.status === 'Dipinjam') {
+                        tx.returnTime = `${this.returnForm.returnDateStr} ${this.returnForm.returnTimeSlot}`;
+                        tx.status = 'Dikembalikan';
+                        tx.hasReturnPhoto = this.returnForm.hasPhoto;
+                        tx.returnPhotoUrl = this.returnForm.photoDataUrl || 'https://placehold.co/400x300/e2e8f0/475569?text=Bukti+Foto+Kembali';
+
+                        let member = this.members.find(m => m.name === tx.memberName);
+                        let sisaBintang = 3;
+                        if (member) {
+                            if (member.activeBorrowed > 0) member.activeBorrowed -= 1;
+                            if (this.returnForm.sanctionStatus === 'Terlambat / Barang Rusak (Kurang 1 Bintang)' || this.returnForm.sanctionStatus === 'Tidak Dikembalikan / Hilang (Kurang 1 Bintang)') {
+                                member.stars = Math.max(0, member.stars - 1);
+                            }
+                            sisaBintang = member.stars;
+                        }
+
+                        this.saveToLocalStorage();
+                        this.showReturnModal = false;
+                        this.showNotification('Menyimpan pembaruan ke server Google Sheets...');
+
+                        // 5. Kirim Data Pembaruan Pengembalian (POST ke Google Sheets)
+                        try {
+                            let response = await fetch(WEB_APP_URL, {
+                                method: "POST",
+                                headers: {
+                                    "Content-Type": "text/plain;charset=utf-8",
+                                },
+                                body: JSON.stringify({
+                                    action: "updateTransaction",
+                                    id_transaksi: tx.id,
+                                    waktu_kembali: tx.returnTime,
+                                    status: tx.status,
+                                    sanksi: this.returnForm.sanctionStatus,
+                                    nama_peminjam: tx.memberName,
+                                    sisa_bintang: sisaBintang
+                                })
+                            });
+                            
+                            let result = await response.json();
+                            if (result.status === "success") {
+                                this.showNotification("Pengembalian berhasil dicatat di Google Sheets!");
+                                await this.init(); // Memuat ulang/refresh data sinkron dari server
+                            }
+                        } catch (error) {
+                            console.error("Gagal mengirim data pengembalian:", error);
+                            this.showNotification("Gagal ke server, disimpan secara lokal.");
+                        }
+                    }
+                },
+
+                openConfirm(title, message, action) {
+                    this.confirmModal.title = title;
+                    this.confirmModal.message = message;
+                    this.confirmModal.action = action;
+                    this.confirmModal.show = true;
+                },
+
+                executeConfirmAction() {
+                    if (this.confirmModal.action) {
+                        this.confirmModal.action();
+                    }
+                    this.confirmModal.show = false;
+                },
+
+                deleteTransaction(id) {
+                    this.openConfirm('Hapus Transaksi', 'Hapus transaksi ini secara permanen?', () => {
+                        this.transactions = this.transactions.filter(t => t.id !== id);
+                        this.saveToLocalStorage();
+                        this.showNotification('Transaksi berhasil dihapus.');
+                    });
+                },
+
+                saveSettings() {
+                    this.saveToLocalStorage();
+                    this.showNotification('Pengaturan total barang berhasil disimpan.');
+                },
+
+                resetData() {
+                    this.openConfirm('Reset Data', 'Apakah Anda yakin ingin mereset seluruh data? Aksi ini tidak dapat dibatalkan.', () => {
+                        this.transactions = [];
+                        this.members = [];
+                        this.totalBarang = 50;
+                        localStorage.removeItem('sistem_inventaris_transactions');
+                        localStorage.removeItem('sistem_inventaris_members');
+                        localStorage.removeItem('sistem_inventaris_total');
+                        this.showNotification('Data berhasil direset.');
+                    });
+                },
+
+                editMember(member) {
+                    this.activeMemberEdit = { ...member };
+                    this.showEditMemberModal = true;
+                },
+
+                saveMemberEdit() {
+                    let m = this.members.find(item => item.id === this.activeMemberEdit.id);
+                    if (m) {
+                        m.stars = this.activeMemberEdit.stars;
+                    }
+                    this.saveToLocalStorage();
+                    this.showEditMemberModal = false;
+                    this.showNotification('Bintang anggota diperbarui.');
+                },
+
+                deleteMember(id) {
+                    this.openConfirm('Hapus Anggota', 'Apakah Anda yakin ingin menghapus anggota ini?', () => {
+                        this.members = this.members.filter(m => m.id !== id);
+                        this.saveToLocalStorage();
+                        this.showNotification('Anggota berhasil dihapus.');
+                    });
+                },
+
+                renderStars(count) {
+                    let html = '';
+                    for (let i = 0; i < count; i++) {
+                        html += '<i class="fa-solid fa-star"></i>';
+                    }
+                    return html;
+                },
+
+                applyChartFilter() {
+                    this.showNotification('Filter grafik diterapkan.');
+                },
+
+                filterReport() {
+                    this.showNotification('Laporan berhasil difilter.');
+                },
+
+                exportCSV() {
+                    let csv = "data:text/csv;charset=utf-8,ID,Tanggal,Nama,Barang,Jumlah,Ambil,Kembali,Status\n";
+                    this.transactions.forEach(r => {
+                        csv += [r.id, r.date, r.memberName, r.itemName, r.qty, r.borrowTime, r.returnTime || '-', r.status].join(",") + "\n";
+                    });
+                    let uri = encodeURI(csv);
+                    let link = document.createElement("a");
+                    link.setAttribute("href", uri);
+                    link.setAttribute("download", "laporan_inventaris.csv");
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    this.showNotification('CSV berhasil diunduh.');
+                },
+
+                viewPhotoModal(item, type = 'borrow') {
+                    if (type === 'borrow') {
+                        this.currentPhotoUrl = item.photoUrl || 'https://placehold.co/400x300/e2e8f0/475569?text=Bukti+Foto+Barang';
+                    } else {
+                        this.currentPhotoUrl = item.returnPhotoUrl || 'https://placehold.co/400x300/e2e8f0/475569?text=Bukti+Foto+Kembali';
+                    }
+                    this.currentPhotoItemName = item.itemName;
+                    this.currentPhotoMemberName = item.memberName;
+                    this.showPhotoPreviewModal = true;
+                },
+
+                showNotification(msg) {
+                    this.notification.message = msg;
+                    this.notification.show = true;
+                    setTimeout(() => {
+                        this.notification.show = false;
+                    }, 3000);
+                }
+            }
+        }
+    </script>
+</body>
+</html>
